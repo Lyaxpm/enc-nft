@@ -1,193 +1,118 @@
-// Octra Secret NFT Smart Contract
-// Language: AppliedML (.aml) - Octra's smart contract language
-// Standard: OCS-01-NFT (Non-Fungible Token extension of OCS-01)
-//
-// This contract manages Secret NFTs where encrypted content is stored
-// in the metadata URI on IPFS. Only the token owner can decrypt the secret.
-
-import "interfaces/IOCS01NFT"
-
-// ============================================================
-// STATE
-// ============================================================
+// SecretMint NFT Contract
+// Standard: OCS-01-NFT (Octra Non-Fungible Token)
+// Single-file contract - no external imports needed
 
 state {
-    name: string = "Octra Secret NFT"
-    symbol: string = "OSNFT"
+    name: string = "SecretMint NFT"
+    symbol: string = "SMINT"
     owner: address
     total_supply: u64 = 0
-
-    // Mapping: token_id -> owner address
     owners: map[string, address]
-
-    // Mapping: token_id -> metadata URI (IPFS hash)
     token_uris: map[string, string]
-
-    // Mapping: owner address -> list of token IDs
-    owned_tokens: map[address, list[string]]
-
-    // Mapping: token_id -> approved address (for transfers)
+    balances: map[address, u64]
     approvals: map[string, address]
-
-    // Mapping: token_id -> listing price (0 = not for sale)
     listings: map[string, u64]
 }
-
-// ============================================================
-// CONSTRUCTOR
-// ============================================================
 
 constructor(deployer: address) {
     self.owner = deployer
 }
 
-// ============================================================
-// EVENTS
-// ============================================================
-
-event Mint(to: address, token_id: string, metadata_uri: string)
+event Mint(to: address, token_id: string, uri: string)
 event Transfer(from: address, to: address, token_id: string)
 event Approval(owner: address, approved: address, token_id: string)
 event Listed(token_id: string, price: u64)
 event Unlisted(token_id: string)
-event Sale(token_id: string, from: address, to: address, price: u64)
+event Sale(token_id: string, seller: address, buyer: address, price: u64)
 
-// ============================================================
-// MINT
-// ============================================================
-
-method mint(to: address, token_id: string, metadata_uri: string) {
-    assert(self.owners.contains(token_id) == false, "Token already exists")
-
+method mint(to: address, token_id: string, uri: string) {
+    assert(!self.owners.contains(token_id), "token exists")
     self.owners[token_id] = to
-    self.token_uris[token_id] = metadata_uri
-
-    if self.owned_tokens.contains(to) == false {
-        self.owned_tokens[to] = []
+    self.token_uris[token_id] = uri
+    if self.balances.contains(to) {
+        self.balances[to] = self.balances[to] + 1
+    } else {
+        self.balances[to] = 1
     }
-    self.owned_tokens[to].append(token_id)
-
     self.total_supply = self.total_supply + 1
-
-    emit Mint(to, token_id, metadata_uri)
+    emit Mint(to, token_id, uri)
 }
 
-// ============================================================
-// TRANSFER
-// ============================================================
-
 method transfer(from: address, to: address, token_id: string) {
-    assert(
-        self.owners[token_id] == caller or self.approvals[token_id] == caller,
-        "Not authorized"
-    )
-    assert(self.owners[token_id] == from, "From is not the owner")
-
+    assert(self.owners[token_id] == caller || self.approvals[token_id] == caller, "not authorized")
+    assert(self.owners[token_id] == from, "not owner")
     self.owners[token_id] = to
-
-    self.owned_tokens[from].remove(token_id)
-
-    if self.owned_tokens.contains(to) == false {
-        self.owned_tokens[to] = []
+    self.balances[from] = self.balances[from] - 1
+    if self.balances.contains(to) {
+        self.balances[to] = self.balances[to] + 1
+    } else {
+        self.balances[to] = 1
     }
-    self.owned_tokens[to].append(token_id)
-
     if self.approvals.contains(token_id) {
-        self.approvals.remove(token_id)
+        self.approvals.delete(token_id)
     }
-
-    // Remove listing if exists
     if self.listings.contains(token_id) {
-        self.listings.remove(token_id)
+        self.listings.delete(token_id)
     }
-
     emit Transfer(from, to, token_id)
 }
 
-// ============================================================
-// APPROVE
-// ============================================================
-
-method approve(approved: address, token_id: string) {
-    assert(self.owners[token_id] == caller, "Not the owner")
-    self.approvals[token_id] = approved
-    emit Approval(caller, approved, token_id)
+method approve(to: address, token_id: string) {
+    assert(self.owners[token_id] == caller, "not owner")
+    self.approvals[token_id] = to
+    emit Approval(caller, to, token_id)
 }
 
-// ============================================================
-// MARKETPLACE - LIST / BUY
-// ============================================================
-
 method list_for_sale(token_id: string, price: u64) {
-    assert(self.owners[token_id] == caller, "Not the owner")
-    assert(price > 0, "Price must be greater than zero")
+    assert(self.owners[token_id] == caller, "not owner")
+    assert(price > 0, "price must be > 0")
     self.listings[token_id] = price
     emit Listed(token_id, price)
 }
 
 method unlist(token_id: string) {
-    assert(self.owners[token_id] == caller, "Not the owner")
-    assert(self.listings.contains(token_id), "Not listed")
-    self.listings.remove(token_id)
+    assert(self.owners[token_id] == caller, "not owner")
+    assert(self.listings.contains(token_id), "not listed")
+    self.listings.delete(token_id)
     emit Unlisted(token_id)
 }
 
 method buy(token_id: string) {
-    assert(self.listings.contains(token_id), "Token is not for sale")
+    assert(self.listings.contains(token_id), "not for sale")
     let price = self.listings[token_id]
-    assert(value >= price, "Insufficient payment")
-
+    assert(value >= price, "insufficient payment")
     let seller = self.owners[token_id]
-    assert(caller != seller, "Cannot buy your own token")
-
-    // Transfer ownership
+    assert(caller != seller, "cannot buy own token")
     self.owners[token_id] = caller
-
-    self.owned_tokens[seller].remove(token_id)
-
-    if self.owned_tokens.contains(caller) == false {
-        self.owned_tokens[caller] = []
+    self.balances[seller] = self.balances[seller] - 1
+    if self.balances.contains(caller) {
+        self.balances[caller] = self.balances[caller] + 1
+    } else {
+        self.balances[caller] = 1
     }
-    self.owned_tokens[caller].append(token_id)
-
-    // Clear approvals and listing
     if self.approvals.contains(token_id) {
-        self.approvals.remove(token_id)
+        self.approvals.delete(token_id)
     }
-    self.listings.remove(token_id)
-
-    // Transfer payment to seller
+    self.listings.delete(token_id)
     send(seller, price)
-
     emit Sale(token_id, seller, caller, price)
 }
 
-// ============================================================
-// READ METHODS
-// ============================================================
-
 method owner_of(token_id: string) -> address {
-    assert(self.owners.contains(token_id), "Token does not exist")
+    assert(self.owners.contains(token_id), "token does not exist")
     return self.owners[token_id]
 }
 
 method token_uri(token_id: string) -> string {
-    assert(self.token_uris.contains(token_id), "Token does not exist")
+    assert(self.token_uris.contains(token_id), "token does not exist")
     return self.token_uris[token_id]
 }
 
 method balance_of(addr: address) -> u64 {
-    if self.owned_tokens.contains(addr) == false {
-        return 0
+    if self.balances.contains(addr) {
+        return self.balances[addr]
     }
-    return self.owned_tokens[addr].length()
-}
-
-method tokens_of(addr: address) -> list[string] {
-    if self.owned_tokens.contains(addr) == false {
-        return []
-    }
-    return self.owned_tokens[addr]
+    return 0
 }
 
 method get_name() -> string {
@@ -203,12 +128,15 @@ method get_total_supply() -> u64 {
 }
 
 method get_listing_price(token_id: string) -> u64 {
-    if self.listings.contains(token_id) == false {
-        return 0
+    if self.listings.contains(token_id) {
+        return self.listings[token_id]
     }
-    return self.listings[token_id]
+    return 0
 }
 
-method is_listed(token_id: string) -> bool {
-    return self.listings.contains(token_id)
+method is_listed(token_id: string) -> u64 {
+    if self.listings.contains(token_id) {
+        return 1
+    }
+    return 0
 }
