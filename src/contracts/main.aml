@@ -5,7 +5,7 @@
 // This contract manages Secret NFTs where encrypted content is stored
 // in the metadata URI on IPFS. Only the token owner can decrypt the secret.
 
-import IOCS01NFT from "interfaces/IOCS01NFT"
+import "interfaces/IOCS01NFT"
 
 // ============================================================
 // STATE
