@@ -1,0 +1,31 @@
+// OCS-01-NFT Interface
+// Non-Fungible Token standard interface for Octra Network
+// Based on OCS-01 token standard adapted for unique assets
+
+interface IOCS01NFT {
+    // Mint a new token
+    method mint(to: address, token_id: string, metadata_uri: string)
+    
+    // Transfer a token
+    method transfer(from: address, to: address, token_id: string)
+    
+    // Approve an address for transfer
+    method approve(approved: address, token_id: string)
+    
+    // Query owner of a token
+    method owner_of(token_id: string) -> address
+    
+    // Query metadata URI
+    method token_uri(token_id: string) -> string
+    
+    // Query balance
+    method balance_of(addr: address) -> u64
+    
+    // Query all tokens of owner
+    method tokens_of(addr: address) -> list[string]
+    
+    // Token info
+    method get_name() -> string
+    method get_symbol() -> string
+    method get_total_supply() -> u64
+}
