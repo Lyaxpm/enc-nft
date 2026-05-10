@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 const WalletContext = createContext(null);
 
 const OCTRA_RPC = import.meta.env.VITE_OCTRA_RPC_URL || 'http://46.101.86.250:8080';
+const CIRCLE_ID = import.meta.env.VITE_OCTRA_CIRCLE_ID || '';
 
 export function WalletProvider({ children }) {
   const [wallet, setWallet] = useState(null);
@@ -30,7 +31,12 @@ export function WalletProvider({ children }) {
         return;
       }
 
-      const response = await provider.connect();
+      // Pass circleId if required by the wallet extension
+      const connectParams = {};
+      if (CIRCLE_ID) {
+        connectParams.circleId = CIRCLE_ID;
+      }
+      const response = await provider.connect(connectParams);
       const address = response.address || response.publicKey;
 
       setWallet({
