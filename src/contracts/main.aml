@@ -1,141 +1,159 @@
 contract SecretMintNFT {
 
-    state {
-        name: string = "SecretMint NFT"
-        symbol: string = "SMINT"
-        owner: address
-        total_supply: u64 = 0
-        owners: map[string, address]
-        token_uris: map[string, string]
-        balances: map[address, u64]
-        approvals: map[string, address]
-        listings: map[string, u64]
-    }
+  event Mint(token_id: int, to: address, uri: string)
+  event Transfer(token_id: int, from: address, to: address)
+  event Approval(token_id: int, owner: address, approved: address)
+  event Listed(token_id: int, price: int, seller: address)
+  event Unlisted(token_id: int, seller: address)
+  event Sale(token_id: int, seller: address, buyer: address, price: int)
 
-    constructor(deployer: address) {
-        self.owner = deployer
-    }
+  const MAX_SUPPLY: int = 1000000
 
-    event Mint(to: address, token_id: string, uri: string)
-    event Transfer(from: address, to: address, token_id: string)
-    event Approval(owner: address, approved: address, token_id: string)
-    event Listed(token_id: string, price: u64)
-    event Unlisted(token_id: string)
-    event Sale(token_id: string, seller: address, buyer: address, price: u64)
+  state {
+    name: string
+    symbol: string
+    owner: address
+    total_supply: int
 
-    method mint(to: address, token_id: string, uri: string) {
-        assert(!self.owners.contains(token_id), "token exists")
-        self.owners[token_id] = to
-        self.token_uris[token_id] = uri
-        if self.balances.contains(to) {
-            self.balances[to] = self.balances[to] + 1
-        } else {
-            self.balances[to] = 1
-        }
-        self.total_supply = self.total_supply + 1
-        emit Mint(to, token_id, uri)
-    }
+    owners: map[int]address
+    token_uris: map[int]string
+    balances: map[address]int
+    approvals: map[int]address
+    listings: map[int]int
+    sellers: map[int]address
 
-    method transfer(from: address, to: address, token_id: string) {
-        assert(self.owners[token_id] == caller || self.approvals[token_id] == caller, "not authorized")
-        assert(self.owners[token_id] == from, "not owner")
-        self.owners[token_id] = to
-        self.balances[from] = self.balances[from] - 1
-        if self.balances.contains(to) {
-            self.balances[to] = self.balances[to] + 1
-        } else {
-            self.balances[to] = 1
-        }
-        if self.approvals.contains(token_id) {
-            self.approvals.delete(token_id)
-        }
-        if self.listings.contains(token_id) {
-            self.listings.delete(token_id)
-        }
-        emit Transfer(from, to, token_id)
-    }
+    treasury: int
+  }
 
-    method approve(to: address, token_id: string) {
-        assert(self.owners[token_id] == caller, "not owner")
-        self.approvals[token_id] = to
-        emit Approval(caller, to, token_id)
-    }
+  constructor(n: string, s: string) {
+    self.owner = origin
+    self.name = n
+    self.symbol = s
+    self.total_supply = 0
+    self.treasury = 0
+  }
 
-    method list_for_sale(token_id: string, price: u64) {
-        assert(self.owners[token_id] == caller, "not owner")
-        assert(price > 0, "price must be > 0")
-        self.listings[token_id] = price
-        emit Listed(token_id, price)
-    }
+  fn mint(to: address, uri: string): int {
+    require(caller == self.owner, "not owner")
+    require(self.total_supply < MAX_SUPPLY, "max supply reached")
+    let id = self.total_supply
+    self.owners[id] = to
+    self.token_uris[id] = uri
+    self.balances[to] += 1
+    self.total_supply += 1
+    emit Mint(id, to, uri)
+    return id
+  }
 
-    method unlist(token_id: string) {
-        assert(self.owners[token_id] == caller, "not owner")
-        assert(self.listings.contains(token_id), "not listed")
-        self.listings.delete(token_id)
-        emit Unlisted(token_id)
+  fn transfer_nft(token_id: int, to: address): bool {
+    require(token_id >= 0, "invalid id")
+    require(token_id < self.total_supply, "token not found")
+    let from = self.owners[token_id]
+    let approved = self.approvals[token_id]
+    require(caller == from || caller == approved, "not authorized")
+    self.owners[token_id] = to
+    self.balances[from] -= 1
+    self.balances[to] += 1
+    self.approvals[token_id] = to
+    if self.listings[token_id] > 0 {
+      self.listings[token_id] = 0
+      self.sellers[token_id] = to
     }
+    emit Transfer(token_id, from, to)
+    return true
+  }
 
-    method buy(token_id: string) {
-        assert(self.listings.contains(token_id), "not for sale")
-        let price = self.listings[token_id]
-        assert(value >= price, "insufficient payment")
-        let seller = self.owners[token_id]
-        assert(caller != seller, "cannot buy own token")
-        self.owners[token_id] = caller
-        self.balances[seller] = self.balances[seller] - 1
-        if self.balances.contains(caller) {
-            self.balances[caller] = self.balances[caller] + 1
-        } else {
-            self.balances[caller] = 1
-        }
-        if self.approvals.contains(token_id) {
-            self.approvals.delete(token_id)
-        }
-        self.listings.delete(token_id)
-        send(seller, price)
-        emit Sale(token_id, seller, caller, price)
-    }
+  fn approve(token_id: int, to: address): bool {
+    require(token_id >= 0, "invalid id")
+    require(token_id < self.total_supply, "token not found")
+    require(caller == self.owners[token_id], "not owner")
+    self.approvals[token_id] = to
+    emit Approval(token_id, caller, to)
+    return true
+  }
 
-    method owner_of(token_id: string) -> address {
-        assert(self.owners.contains(token_id), "token does not exist")
-        return self.owners[token_id]
-    }
+  fn list_for_sale(token_id: int, price: int): bool {
+    require(token_id >= 0, "invalid id")
+    require(token_id < self.total_supply, "token not found")
+    require(caller == self.owners[token_id], "not owner")
+    require(price > 0, "price must be positive")
+    self.listings[token_id] = price
+    self.sellers[token_id] = caller
+    emit Listed(token_id, price, caller)
+    return true
+  }
 
-    method token_uri(token_id: string) -> string {
-        assert(self.token_uris.contains(token_id), "token does not exist")
-        return self.token_uris[token_id]
-    }
+  fn unlist(token_id: int): bool {
+    require(token_id >= 0, "invalid id")
+    require(token_id < self.total_supply, "token not found")
+    require(caller == self.owners[token_id], "not owner")
+    require(self.listings[token_id] > 0, "not listed")
+    self.listings[token_id] = 0
+    emit Unlisted(token_id, caller)
+    return true
+  }
 
-    method balance_of(addr: address) -> u64 {
-        if self.balances.contains(addr) {
-            return self.balances[addr]
-        }
-        return 0
-    }
+  fn buy(token_id: int): bool {
+    require(token_id >= 0, "invalid id")
+    require(token_id < self.total_supply, "token not found")
+    let price = self.listings[token_id]
+    require(price > 0, "not for sale")
+    require(value >= price, "insufficient payment")
+    let seller = self.owners[token_id]
+    require(caller != seller, "cannot buy own token")
+    self.owners[token_id] = caller
+    self.balances[seller] -= 1
+    self.balances[caller] += 1
+    self.listings[token_id] = 0
+    self.approvals[token_id] = caller
+    self.treasury += value
+    require(transfer(seller, price), "transfer failed")
+    self.treasury -= price
+    emit Sale(token_id, seller, caller, price)
+    return true
+  }
 
-    method get_name() -> string {
-        return self.name
-    }
+  view fn owner_of(token_id: int): address {
+    require(token_id >= 0, "invalid id")
+    require(token_id < self.total_supply, "token not found")
+    return self.owners[token_id]
+  }
 
-    method get_symbol() -> string {
-        return self.symbol
-    }
+  view fn token_uri(token_id: int): string {
+    require(token_id >= 0, "invalid id")
+    require(token_id < self.total_supply, "token not found")
+    return self.token_uris[token_id]
+  }
 
-    method get_total_supply() -> u64 {
-        return self.total_supply
-    }
+  view fn balance_of(addr: address): int {
+    return self.balances[addr]
+  }
 
-    method get_listing_price(token_id: string) -> u64 {
-        if self.listings.contains(token_id) {
-            return self.listings[token_id]
-        }
-        return 0
-    }
+  view fn get_name(): string {
+    return self.name
+  }
 
-    method is_listed(token_id: string) -> u64 {
-        if self.listings.contains(token_id) {
-            return 1
-        }
-        return 0
-    }
+  view fn get_symbol(): string {
+    return self.symbol
+  }
+
+  view fn get_total_supply(): int {
+    return self.total_supply
+  }
+
+  view fn get_listing_price(token_id: int): int {
+    return self.listings[token_id]
+  }
+
+  view fn is_listed(token_id: int): int {
+    return self.listings[token_id]
+  }
+
+  view fn get_owner(): address {
+    return self.owner
+  }
+
+  view fn get_approved(token_id: int): address {
+    return self.approvals[token_id]
+  }
 }
