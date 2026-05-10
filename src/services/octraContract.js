@@ -2,21 +2,23 @@
  * Octra Secret NFT Contract Service
  * 
  * Handles interaction with the Secret NFT smart contract on Octra Devnet.
- * Contract follows OCS-01-NFT standard with marketplace extensions.
+ * Contract follows AppliedML (.aml) syntax from octra-labs/contract-examples.
  * 
  * Contract Methods (AppliedML/.aml):
- * - mint(to, token_id, metadata_uri) -> Mint a new NFT
- * - transfer(from, to, token_id) -> Transfer NFT ownership
- * - approve(approved, token_id) -> Approve address for transfer
- * - owner_of(token_id) -> Get owner address
- * - token_uri(token_id) -> Get metadata URI
- * - balance_of(address) -> Get NFT count for address
- * - tokens_of(address) -> Get all token IDs owned by address
- * - list_for_sale(token_id, price) -> List NFT for sale
- * - unlist(token_id) -> Remove listing
- * - buy(token_id) -> Buy a listed NFT
- * - get_listing_price(token_id) -> Get listing price
- * - is_listed(token_id) -> Check if NFT is listed
+ * - mint(to, uri) -> int (returns token_id, owner-only)
+ * - transfer_nft(token_id, to) -> bool
+ * - approve(token_id, to) -> bool
+ * - owner_of(token_id) -> address (view)
+ * - token_uri(token_id) -> string (view)
+ * - balance_of(address) -> int (view)
+ * - list_for_sale(token_id, price) -> bool
+ * - unlist(token_id) -> bool
+ * - buy(token_id) -> bool (payable)
+ * - get_listing_price(token_id) -> int (view)
+ * - is_listed(token_id) -> int (view, 0 = not listed, >0 = price)
+ * - get_name() -> string (view)
+ * - get_symbol() -> string (view)
+ * - get_total_supply() -> int (view)
  */
 
 const OCTRA_DEVNET_RPC = import.meta.env.VITE_OCTRA_RPC_URL || 'https://rpc.devnet.octra.org/rpc';
@@ -56,29 +58,36 @@ async function rpcCall(method, params = []) {
 }
 
 /**
- * Call a contract method (read-only)
+ * Call a contract view method (read-only)
  */
-async function callContract(method, params = []) {
-  return rpcCall('call_program', [CONTRACT_ADDRESS, method, ...params]);
+async function callView(method, params = [], caller = null) {
+  return rpcCall('call_view', [
+    {
+      contract: CONTRACT_ADDRESS,
+      method,
+      params: params.map(String),
+      caller: caller || '',
+    },
+  ]);
 }
 
 /**
- * Send a transaction to the contract (state-changing)
+ * Send a contract transaction (state-changing)
  */
 async function sendContractTransaction(method, params, wallet, valueOct = 0) {
   if (wallet.provider && wallet.provider.signAndSendTransaction) {
     return wallet.provider.signAndSendTransaction({
       to: CONTRACT_ADDRESS,
       method,
-      params,
+      params: params.map(String),
       value: valueOct,
     });
   }
-  
+
   // Demo mode simulation
   await new Promise(resolve => setTimeout(resolve, 1500));
   return {
-    hash: '0x' + Array.from({ length: 64 }, () => 
+    hash: '0x' + Array.from({ length: 64 }, () =>
       Math.floor(Math.random() * 16).toString(16)
     ).join(''),
     status: 'confirmed',
@@ -91,51 +100,57 @@ async function sendContractTransaction(method, params, wallet, valueOct = 0) {
 
 /**
  * Mint a new Secret NFT
+ * Contract signature: mint(to: address, uri: string) -> int
+ * Note: only contract owner can mint in current contract.
+ * token_id is assigned by contract sequentially (0, 1, 2, ...).
  */
 export async function mintNFT(wallet, tokenId, metadataUri) {
-  return sendContractTransaction('mint', [wallet.address, tokenId, metadataUri], wallet);
+  return sendContractTransaction('mint', [wallet.address, metadataUri], wallet);
 }
 
 /**
  * Transfer an NFT to another address
+ * Contract signature: transfer_nft(token_id: int, to: address) -> bool
  */
 export async function transferNFT(wallet, from, to, tokenId) {
-  return sendContractTransaction('transfer', [from, to, tokenId], wallet);
+  return sendContractTransaction('transfer_nft', [tokenId, to], wallet);
 }
 
 /**
  * Approve an address for transfer
+ * Contract signature: approve(token_id: int, to: address) -> bool
  */
 export async function approveNFT(wallet, approved, tokenId) {
-  return sendContractTransaction('approve', [approved, tokenId], wallet);
+  return sendContractTransaction('approve', [tokenId, approved], wallet);
 }
 
 /**
- * Get the owner of a token
+ * Get the owner of a token (view)
  */
 export async function ownerOf(tokenId) {
-  return callContract('owner_of', [tokenId]);
+  return callView('owner_of', [tokenId]);
 }
 
 /**
- * Get the metadata URI of a token
+ * Get the metadata URI of a token (view)
  */
 export async function tokenURI(tokenId) {
-  return callContract('token_uri', [tokenId]);
+  return callView('token_uri', [tokenId]);
 }
 
 /**
- * Get all tokens owned by an address
- */
-export async function tokensOf(address) {
-  return callContract('tokens_of', [address]);
-}
-
-/**
- * Get NFT count for an address
+ * Get NFT count for an address (view)
  */
 export async function balanceOf(address) {
-  return callContract('balance_of', [address]);
+  return callView('balance_of', [address]);
+}
+
+/**
+ * Get all tokens owned by an address - fallback to local storage in demo mode.
+ * On-chain contract does not expose a tokens_of method; DApp uses localStorage.
+ */
+export async function tokensOf(address) {
+  return null;
 }
 
 // ============================================================
@@ -144,27 +159,26 @@ export async function balanceOf(address) {
 
 /**
  * List an NFT for sale
- * @param {object} wallet - Connected wallet
- * @param {string} tokenId - Token to list
- * @param {number} price - Price in OCT (will be converted to raw units)
+ * Contract signature: list_for_sale(token_id: int, price: int) -> bool
+ * @param {number} price - Price in OCT (converted to raw units)
  */
 export async function listForSale(wallet, tokenId, price) {
-  const priceRaw = Math.floor(price * 1_000_000); // OCT to raw units
+  const priceRaw = Math.floor(price * 1_000_000);
   return sendContractTransaction('list_for_sale', [tokenId, priceRaw], wallet);
 }
 
 /**
  * Remove an NFT listing
+ * Contract signature: unlist(token_id: int) -> bool
  */
 export async function unlistNFT(wallet, tokenId) {
   return sendContractTransaction('unlist', [tokenId], wallet);
 }
 
 /**
- * Buy a listed NFT
- * @param {object} wallet - Buyer wallet
- * @param {string} tokenId - Token to buy
- * @param {number} price - Price in OCT
+ * Buy a listed NFT (payable)
+ * Contract signature: buy(token_id: int) -> bool
+ * @param {number} price - Price in OCT (used as attached value)
  */
 export async function buyNFT(wallet, tokenId, price) {
   const priceRaw = Math.floor(price * 1_000_000);
@@ -175,16 +189,18 @@ export async function buyNFT(wallet, tokenId, price) {
  * Get listing price for a token (returns OCT, 0 = not listed)
  */
 export async function getListingPrice(tokenId) {
-  const result = await callContract('get_listing_price', [tokenId]);
-  if (result) return result / 1_000_000;
+  const result = await callView('get_listing_price', [tokenId]);
+  if (result) return Number(result) / 1_000_000;
   return 0;
 }
 
 /**
  * Check if a token is listed for sale
+ * Contract returns price (int); 0 = not listed, >0 = listed.
  */
 export async function isListed(tokenId) {
-  return callContract('is_listed', [tokenId]);
+  const result = await callView('is_listed', [tokenId]);
+  return result && Number(result) > 0;
 }
 
 // ============================================================
@@ -192,7 +208,10 @@ export async function isListed(tokenId) {
 // ============================================================
 
 /**
- * Generate a unique token ID
+ * Generate a unique token ID for frontend/demo tracking.
+ * Note: on-chain contract assigns sequential int IDs via total_supply.
+ * In production, read on-chain token_id from the Mint event or by calling
+ * get_total_supply before mint.
  */
 export function generateTokenId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
