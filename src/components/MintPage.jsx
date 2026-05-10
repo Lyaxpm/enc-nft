@@ -16,6 +16,7 @@ export default function MintPage() {
     description: '',
     secretContent: '',
     collectionId: '',
+    mintPrice: '1',
   });
   const [coverImage, setCoverImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
@@ -101,8 +102,9 @@ export default function MintPage() {
       }
 
       // Step 4: Mint NFT on-chain
-      setMintStep('Minting NFT on Octra Devnet...');
-      await mintNFT(wallet, tokenId, metadataUri);
+      setMintStep('Minting NFT on Octra...');
+      const mintAmount = parseFloat(formData.mintPrice) || 1;
+      await mintNFT(wallet, tokenId, metadataUri, mintAmount);
 
       // Step 5: Store locally
       storeNFT({
@@ -271,6 +273,24 @@ export default function MintPage() {
             </svg>
             This content will be encrypted. Only the NFT owner can decrypt and view it.
           </p>
+        </div>
+
+        {/* Mint Price */}
+        <div className="card">
+          <label className="block text-sm font-medium text-dark-200 mb-2">
+            Mint Price (OCT) <span className="text-red-400">*</span>
+          </label>
+          <input
+            type="number"
+            step="0.01"
+            min="0.01"
+            value={formData.mintPrice}
+            onChange={(e) => setFormData(prev => ({ ...prev, mintPrice: e.target.value }))}
+            placeholder="1.00"
+            className="input-field"
+            required
+          />
+          <p className="mt-1 text-xs text-dark-500">Amount of OCT to attach to the mint transaction.</p>
         </div>
 
         {/* Submit */}

@@ -125,9 +125,11 @@ async function sendContractTransaction(method, params, wallet, valueOct = 0) {
  * Mint a new Secret NFT
  * Contract signature: mint(to: address, uri: string) -> int
  * Note: only contract owner can mint. token_id assigned sequentially.
+ * @param {number} amountOct - OCT amount to attach to the transaction
  */
-export async function mintNFT(wallet, tokenId, metadataUri) {
-  return sendContractTransaction('mint', [wallet.address, metadataUri], wallet);
+export async function mintNFT(wallet, tokenId, metadataUri, amountOct = 1) {
+  const amountRaw = Math.floor(amountOct * 1_000_000);
+  return sendContractTransaction('mint', [wallet.address, metadataUri], wallet, amountRaw);
 }
 
 /**
