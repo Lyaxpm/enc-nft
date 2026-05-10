@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 const WalletContext = createContext(null);
 
 const OCTRA_RPC = import.meta.env.VITE_OCTRA_RPC_URL || 'http://46.101.86.250:8080';
+const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS || '';
 
 export function WalletProvider({ children }) {
   const [wallet, setWallet] = useState(null);
@@ -30,6 +31,7 @@ export function WalletProvider({ children }) {
         return;
       }
 
+      // Connect to wallet - no extra params needed
       const response = await provider.connect();
       const address = response.address || response.publicKey;
 
@@ -84,21 +86,15 @@ export function WalletProvider({ children }) {
           const bal = await wallet.provider.getBalance();
           setBalance(bal);
         } else {
-          const response = await fetch(OCTRA_RPC, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              jsonrpc: '2.0',
-              id: 1,
-              method: 'get_balance',
-              params: [wallet.address],
-            }),
-          }).catch(() => null);
+          // Use REST endpoint like ocs01-test: GET /balance/{address}
+          const response = await fetch(
+            `${OCTRA_RPC}/balance/${wallet.address}`
+          ).catch(() => null);
 
           if (response && response.ok) {
             const data = await response.json();
-            if (data.result) {
-              const raw = parseInt(data.result.balance_raw || data.result || '0', 10);
+            if (data && data.balance_raw) {
+              const raw = parseInt(data.balance_raw, 10);
               setBalance((raw / 1_000_000).toFixed(6));
             } else {
               setBalance('0');
