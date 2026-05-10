@@ -1,6 +1,4 @@
-// SecretMint NFT Contract
-// Standard: OCS-01-NFT (Octra Non-Fungible Token)
-// Single-file contract - no external imports needed
+program SecretMintNFT
 
 state {
     name: string = "SecretMint NFT"
