@@ -4,8 +4,11 @@ import { Toaster } from 'react-hot-toast';
 import Navbar from './components/Navbar';
 import Home from './components/Home';
 import MintPage from './components/MintPage';
-import Gallery from './components/Gallery';
+import Explore from './components/Explore';
 import NFTDetail from './components/NFTDetail';
+import MyNFTs from './components/MyNFTs';
+import Collections from './components/Collections';
+import CollectionDetail from './components/CollectionDetail';
 
 export default function App() {
   return (
@@ -22,8 +25,11 @@ export default function App() {
         <main className="container mx-auto px-4 py-8 max-w-7xl">
           <Routes>
             <Route path="/" element={<Home />} />
+            <Route path="/explore" element={<Explore />} />
             <Route path="/mint" element={<MintPage />} />
-            <Route path="/gallery" element={<Gallery />} />
+            <Route path="/my-nfts" element={<MyNFTs />} />
+            <Route path="/collections" element={<Collections />} />
+            <Route path="/collection/:collectionId" element={<CollectionDetail />} />
             <Route path="/nft/:tokenId" element={<NFTDetail />} />
           </Routes>
         </main>
@@ -39,16 +45,10 @@ export default function App() {
             borderRadius: '12px',
           },
           success: {
-            iconTheme: {
-              primary: '#4c6ef5',
-              secondary: '#fff',
-            },
+            iconTheme: { primary: '#4c6ef5', secondary: '#fff' },
           },
           error: {
-            iconTheme: {
-              primary: '#ef4444',
-              secondary: '#fff',
-            },
+            iconTheme: { primary: '#ef4444', secondary: '#fff' },
           },
         }}
       />
