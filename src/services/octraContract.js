@@ -91,8 +91,20 @@ async function callView(method, params = [], caller = null) {
 
 /**
  * Send a contract transaction (state-changing)
+ * Uses OctWa SDK sendContractCall via wallet provider
  */
 async function sendContractTransaction(method, params, wallet, valueOct = 0) {
+  // If wallet has SDK capability, use it
+  if (wallet.sdk && wallet.capId) {
+    return await wallet.sdk.sendContractCall(wallet.capId, {
+      contract: CONTRACT_ADDRESS,
+      method,
+      params: params.map(String),
+      amount: valueOct,
+    });
+  }
+
+  // Fallback: provider direct call
   if (wallet.provider && wallet.provider.signAndSendTransaction) {
     return wallet.provider.signAndSendTransaction({
       to: CONTRACT_ADDRESS,
@@ -102,14 +114,7 @@ async function sendContractTransaction(method, params, wallet, valueOct = 0) {
     });
   }
 
-  // Demo mode simulation
-  await new Promise(resolve => setTimeout(resolve, 1500));
-  return {
-    hash: '0x' + Array.from({ length: 64 }, () =>
-      Math.floor(Math.random() * 16).toString(16)
-    ).join(''),
-    status: 'confirmed',
-  };
+  throw new Error('No wallet provider available');
 }
 
 // ============================================================
