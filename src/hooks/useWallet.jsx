@@ -3,21 +3,18 @@ import toast from 'react-hot-toast';
 
 const WalletContext = createContext(null);
 
-const OCTRA_DEVNET_RPC = 'https://rpc.devnet.octra.org/rpc';
+const OCTRA_RPC = import.meta.env.VITE_OCTRA_RPC_URL || 'http://46.101.86.250:8080';
 
 export function WalletProvider({ children }) {
   const [wallet, setWallet] = useState(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [balance, setBalance] = useState(null);
 
-  // Check if 0xio wallet extension is available
+  // Check for Octra wallet extensions (0xio, OctWa, or generic octra)
   const getProvider = useCallback(() => {
     if (typeof window !== 'undefined') {
-      // Check for 0xio wallet
       if (window.oxio) return window.oxio;
-      // Check for OctWa wallet
       if (window.octwa) return window.octwa;
-      // Check generic octra provider
       if (window.octra) return window.octra;
     }
     return null;
@@ -27,34 +24,22 @@ export function WalletProvider({ children }) {
     setIsConnecting(true);
     try {
       const provider = getProvider();
-      
-      if (provider) {
-        // Real wallet connection via browser extension
-        const response = await provider.connect();
-        const address = response.address || response.publicKey;
-        
-        setWallet({
-          address,
-          provider,
-          publicKey: response.publicKey,
-        });
 
-        toast.success('Wallet connected!');
-      } else {
-        // Demo mode - generate a simulated wallet for development
-        const { generateDemoWallet } = await import('../utils/demoWallet');
-        const demoWallet = generateDemoWallet();
-        
-        setWallet({
-          address: demoWallet.address,
-          provider: null,
-          publicKey: demoWallet.publicKey,
-          isDemo: true,
-          keyPair: demoWallet.keyPair,
-        });
-
-        toast.success('Connected in Demo Mode (No wallet extension detected)');
+      if (!provider) {
+        toast.error('No Octra wallet detected. Please install 0xio or OctWa extension.');
+        return;
       }
+
+      const response = await provider.connect();
+      const address = response.address || response.publicKey;
+
+      setWallet({
+        address,
+        provider,
+        publicKey: response.publicKey,
+      });
+
+      toast.success('Wallet connected!');
     } catch (error) {
       console.error('Failed to connect wallet:', error);
       toast.error(error.message || 'Failed to connect wallet');
@@ -75,44 +60,21 @@ export function WalletProvider({ children }) {
 
   const signMessage = useCallback(async (message) => {
     if (!wallet) throw new Error('Wallet not connected');
-
-    if (wallet.provider && wallet.provider.signMessage) {
-      return await wallet.provider.signMessage(message);
+    if (!wallet.provider || !wallet.provider.signMessage) {
+      throw new Error('Wallet does not support message signing');
     }
-
-    // Demo mode signing
-    if (wallet.isDemo && wallet.keyPair) {
-      const nacl = await import('tweetnacl');
-      const encoder = new TextEncoder();
-      const messageBytes = encoder.encode(message);
-      const signature = nacl.default.sign.detached(messageBytes, wallet.keyPair.secretKey);
-      return signature;
-    }
-
-    throw new Error('Signing not available');
+    return await wallet.provider.signMessage(message);
   }, [wallet]);
 
   const sendTransaction = useCallback(async (transaction) => {
     if (!wallet) throw new Error('Wallet not connected');
-
-    if (wallet.provider && wallet.provider.signAndSendTransaction) {
-      return await wallet.provider.signAndSendTransaction(transaction);
+    if (!wallet.provider || !wallet.provider.signAndSendTransaction) {
+      throw new Error('Wallet does not support transactions');
     }
-
-    // Demo mode - simulate transaction
-    if (wallet.isDemo) {
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      const txHash = '0x' + Array.from({ length: 64 }, () => 
-        Math.floor(Math.random() * 16).toString(16)
-      ).join('');
-      return { hash: txHash, status: 'confirmed' };
-    }
-
-    throw new Error('Transaction sending not available');
+    return await wallet.provider.signAndSendTransaction(transaction);
   }, [wallet]);
 
-  // Fetch balance
+  // Fetch balance from RPC
   useEffect(() => {
     if (!wallet) return;
 
@@ -122,8 +84,7 @@ export function WalletProvider({ children }) {
           const bal = await wallet.provider.getBalance();
           setBalance(bal);
         } else {
-          // Demo mode or RPC fallback
-          const response = await fetch(OCTRA_DEVNET_RPC, {
+          const response = await fetch(OCTRA_RPC, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -136,17 +97,24 @@ export function WalletProvider({ children }) {
 
           if (response && response.ok) {
             const data = await response.json();
-            setBalance(data.result || '0');
+            if (data.result) {
+              const raw = parseInt(data.result.balance_raw || data.result || '0', 10);
+              setBalance((raw / 1_000_000).toFixed(6));
+            } else {
+              setBalance('0');
+            }
           } else {
-            setBalance('1000.00'); // Demo balance
+            setBalance('0');
           }
         }
       } catch {
-        setBalance('1000.00'); // Fallback demo balance
+        setBalance('0');
       }
     };
 
     fetchBalance();
+    const interval = setInterval(fetchBalance, 30000);
+    return () => clearInterval(interval);
   }, [wallet]);
 
   const value = {
@@ -158,7 +126,7 @@ export function WalletProvider({ children }) {
     signMessage,
     sendTransaction,
     isConnected: !!wallet,
-    rpcUrl: OCTRA_DEVNET_RPC,
+    rpcUrl: OCTRA_RPC,
   };
 
   return (
