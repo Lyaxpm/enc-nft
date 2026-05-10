@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useWallet } from '../hooks/useWallet';
 import { encryptSecret, deriveKeyFromSignature, getSignatureMessage } from '../utils/encryption';
 import { uploadFileToIPFS, uploadMetadataToIPFS, createNFTMetadata, isPinataConfigured } from '../services/pinata';
 import { mintNFT, generateTokenId } from '../services/octraContract';
-import { storeNFT } from '../services/nftStorage';
+import { storeNFT, getAllCollections, getCollectionsByOwner } from '../services/nftStorage';
 
 export default function MintPage() {
   const { wallet, isConnected, signMessage, connect } = useWallet();
@@ -15,11 +15,19 @@ export default function MintPage() {
     name: '',
     description: '',
     secretContent: '',
+    collectionId: '',
   });
   const [coverImage, setCoverImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [isMinting, setIsMinting] = useState(false);
   const [mintStep, setMintStep] = useState('');
+  const [collections, setCollections] = useState([]);
+
+  useEffect(() => {
+    if (wallet) {
+      setCollections(getCollectionsByOwner(wallet.address));
+    }
+  }, [wallet]);
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -106,6 +114,7 @@ export default function MintPage() {
         encryptedSecret,
         owner: wallet.address,
         metadata,
+        collectionId: formData.collectionId || null,
       });
 
       setMintStep('');
@@ -216,6 +225,24 @@ export default function MintPage() {
             className="input-field resize-none"
           />
         </div>
+
+        {/* Collection */}
+        {collections.length > 0 && (
+          <div className="card">
+            <label className="block text-sm font-medium text-dark-200 mb-2">Collection (Optional)</label>
+            <select
+              value={formData.collectionId}
+              onChange={(e) => setFormData(prev => ({ ...prev, collectionId: e.target.value }))}
+              className="input-field"
+            >
+              <option value="">No Collection</option>
+              {collections.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-dark-500">Assign this NFT to one of your collections.</p>
+          </div>
+        )}
 
         {/* Secret Content */}
         <div className="card border-octra-500/20 bg-gradient-to-br from-dark-900 to-octra-950/20">
