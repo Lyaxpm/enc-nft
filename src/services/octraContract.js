@@ -21,7 +21,7 @@
  * - get_total_supply() -> int (view)
  */
 
-const OCTRA_DEVNET_RPC = import.meta.env.VITE_OCTRA_RPC_URL || 'https://rpc.devnet.octra.org/rpc';
+const OCTRA_RPC = import.meta.env.VITE_OCTRA_RPC_URL || 'http://46.101.86.250:8080';
 
 const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS || 'oct_secret_nft_contract_devnet';
 
@@ -30,7 +30,7 @@ const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS || 'oct_secret_nf
  */
 async function rpcCall(method, params = []) {
   try {
-    const response = await fetch(OCTRA_DEVNET_RPC, {
+    const response = await fetch(OCTRA_RPC, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -216,4 +216,4 @@ export function generateTokenId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
-export { CONTRACT_ADDRESS, OCTRA_DEVNET_RPC };
+export { CONTRACT_ADDRESS, OCTRA_RPC };

@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Octra Secret NFT - Mint NFTs with encrypted secret content on Octra Devnet",
+  "description": "SecretMint - NFT Marketplace with encrypted content on Octra Mainnet",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -16,9 +16,7 @@
     "react-router-dom": "^6.26.0",
     "react-hot-toast": "^2.4.1",
     "tweetnacl": "^1.0.3",
-    "tweetnacl-util": "^0.15.1",
-    "bs58": "^6.0.0",
-    "buffer": "^6.0.3"
+    "tweetnacl-util": "^0.15.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
