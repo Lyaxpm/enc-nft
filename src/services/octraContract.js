@@ -59,16 +59,34 @@ async function rpcCall(method, params = []) {
 
 /**
  * Call a contract view method (read-only)
+ * Uses POST /contract/call-view endpoint (from ocs01-test reference)
  */
 async function callView(method, params = [], caller = null) {
-  return rpcCall('call_view', [
-    {
-      contract: CONTRACT_ADDRESS,
-      method,
-      params: params.map(String),
-      caller: caller || '',
-    },
-  ]);
+  try {
+    const response = await fetch(`${OCTRA_RPC}/contract/call-view`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contract: CONTRACT_ADDRESS,
+        method,
+        params: params.map(String),
+        caller: caller || '',
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`View call failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (data.status === 'success') {
+      return data.result;
+    }
+    return null;
+  } catch (error) {
+    console.warn('View call failed:', error.message);
+    return null;
+  }
 }
 
 /**
