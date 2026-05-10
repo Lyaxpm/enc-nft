@@ -1,5 +1,5 @@
 import nacl from 'tweetnacl';
-import { encode as encodeBase58 } from 'bs58';
+import bs58 from 'bs58';
 
 /**
  * Generate a demo wallet for development/testing when no browser extension is available.
@@ -7,8 +7,8 @@ import { encode as encodeBase58 } from 'bs58';
  */
 export function generateDemoWallet() {
   const keyPair = nacl.sign.keyPair();
-  const address = 'oct_' + encodeBase58(keyPair.publicKey).slice(0, 40);
-  const publicKey = encodeBase58(keyPair.publicKey);
+  const address = 'oct_' + bs58.encode(keyPair.publicKey).slice(0, 40);
+  const publicKey = bs58.encode(keyPair.publicKey);
 
   return {
     address,
@@ -21,11 +21,10 @@ export function generateDemoWallet() {
  * Restore a wallet from a stored seed/key for persistent demo sessions
  */
 export function restoreDemoWallet(secretKeyBase58) {
-  const { decode: decodeBase58 } = require('bs58');
-  const secretKey = decodeBase58(secretKeyBase58);
+  const secretKey = bs58.decode(secretKeyBase58);
   const keyPair = nacl.sign.keyPair.fromSecretKey(secretKey);
-  const address = 'oct_' + encodeBase58(keyPair.publicKey).slice(0, 40);
-  const publicKey = encodeBase58(keyPair.publicKey);
+  const address = 'oct_' + bs58.encode(keyPair.publicKey).slice(0, 40);
+  const publicKey = bs58.encode(keyPair.publicKey);
 
   return {
     address,
